@@ -130,11 +130,40 @@ The server will print the device it's using on startup and then wait for client 
 
 ### 2. Running the Client
 
+So far two clients exist:
+- python client
+- html/js client as a firefox extension
+
+avascript client
+
 Open a **new terminal** in the same project directory.
 
 **To start the client and stream your microphone input:**
 ```bash
+#install the client requirements
+venv/bin/pip install -r client_requirements.txt
+#run the client 
 venv/bin/python -m src.client
 ```
 
 The client will connect to the server. Start speaking, and you will see the transcribed text appear in your terminal. Press `Ctrl+C` to stop the client.
+
+### 3. Running the Web Test Page
+
+A simple HTML test page is provided to verify the transcription and the browser extension in a controlled environment.
+
+first, install locally the FF extension:
+go to: [ff settings](about:debugging#/runtime/this-firefox)  
+then add a unpacked extension by selecting the file: ./firefox_extension/manifest.json.
+
+After this, you should be able to activate transcription on any form, e.g Gmail new email.
+
+**To use the test page:**
+1.  Open the file `test_page.html` in your browser (e.g., `firefox test_page.html`).
+2.  Click inside the text area.
+3.  Use the **Alt+Shift+W** shortcut (or the browser extension popup) to start dictating.
+
+**Built-in Shortcuts for the Test Page:**
+*   **Alt + C**: Copy the current content of the textarea to your clipboard.
+*   **Alt + R** or **Alt + D**: Clear the entire textarea.
+*   You can also click the interactive labels at the bottom of the page to perform these actions.
