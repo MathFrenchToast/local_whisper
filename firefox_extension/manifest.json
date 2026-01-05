@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Local ASR Client",
+  "version": "1.1",
+  "description": "Client de transcription vocale locale. Ctrl+Shift+U pour activer.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "ws://127.0.0.1:8000/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "commands": {
+    "toggle-recording": {
+      "suggested_key": {
+        "default": "Alt+W",
+        "mac": "Alt+W"
+      },
+      "description": "Démarrer/Arrêter la transcription"
+    }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Local ASR"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}

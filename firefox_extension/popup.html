@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            width: 250px;
+            padding: 10px;
+            font-family: sans-serif;
+            text-align: center;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+        }
+        #btn-record {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+        }
+        #btn-shortcuts {
+            background-color: #f0f0f0;
+            color: #333;
+            font-size: 12px;
+            margin-top: 5px;
+            padding: 5px;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+            white-space: pre-wrap; /* Pour afficher les sauts de ligne */
+        }
+    </style>
+</head>
+<body>
+    <h3>Local ASR</h3>
+    <button id="btn-record">Commencer / Arrêter</button>
+    <div id="status">Prêt</div>
+    
+    <hr style="margin-top: 15px; border: 0; border-top: 1px solid #eee;">
+    <button id="btn-shortcuts" title="Ouvrir la gestion des raccourcis Firefox">⚙️ Changer le raccourci</button>
+    <script src="popup.js"></script>
+</body>
+</html>
