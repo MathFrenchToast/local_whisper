@@ -2,6 +2,37 @@
 
 This project provides a real-time, local speech-to-text (ASR) service using a client-server architecture. It captures audio from a microphone, streams it to a server, and returns transcriptions in near real-time.
 
+## 🚀 Quick Start
+
+Get up and running in minutes using Docker for the server and Python for the local client.
+
+### 1. Start the Server (Docker)
+This runs the heavy ASR engine in a container (CPU mode by default).
+```bash
+# Build the image
+docker build -t tts-local-server .
+
+# Run container in background (Change 'cpu' to 'cuda' and add '--gpus all' for NVIDIA GPU)
+docker run -d -p 8000:8000 --env DEVICE=cpu tts-local-server
+```
+
+### 2. Start the Client (Local)
+This runs the lightweight system tray app on your host machine.
+```bash
+# Setup python environment
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install client dependencies
+pip install -r requirements-client.txt
+
+# Launch the Tray App
+python -m src.tray_client
+```
+*You will see a Red Icon in your system tray. Press **F8** to toggle recording (Green).*
+
+---
+
 ## Architecture
 
 The application is built on a client-server model, allowing for flexible integration with various types of clients in the future.
