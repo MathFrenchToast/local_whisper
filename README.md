@@ -191,3 +191,19 @@ A simple HTML test page is provided to verify the transcription in a controlled 
 *   **Alt + C**: Copy the current content of the textarea to your clipboard.
 *   **Alt + R** or **Alt + D**: Clear the entire textarea.
 *   You can also click the interactive labels at the bottom of the page to perform these actions.
+
+## Testing
+
+The project includes unit tests to ensure the reliability of the audio processing and ASR services.
+
+**To run the tests:**
+```bash
+# Make sure your virtual environment is activated
+source venv/bin/activate
+
+# Run all tests
+export PYTHONPATH=$PYTHONPATH:.
+python3 -m unittest discover tests
+```
+
+This will run all tests located in the `tests/` directory, verifying the `AudioProcessor` logic and the `ASRService` wrapper.

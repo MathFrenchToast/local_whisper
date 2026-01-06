@@ -24,11 +24,6 @@ def fix_library_paths():
             print(f"Adding NVIDIA library paths to LD_LIBRARY_PATH: {new_paths}")
             os.environ["LD_LIBRARY_PATH"] = f"{':'.join(new_paths)}:{current_ld_path}"
             
-            # Also re-exec the process with the new environment if we are just starting
-            # This ensures dynamic linkers pick up the change for C++ extensions
-            # However, for ctranslate2 loaded via Python, setting env var *might* be enough 
-            # if done before the extension is loaded. Let's try just setting it first.
-            
     except ImportError:
         print("NVIDIA libraries not found in python environment. proceeding without adding paths.")
 
@@ -36,13 +31,10 @@ fix_library_paths()
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from src.asr_service import ASRService
-import numpy as np
-import asyncio
+from src.audio_processor import AudioProcessor
 import json
 import os
 import torch
-import collections
-from enum import Enum
 
 # --- Configuration Loading ---
 def get_config():
@@ -95,96 +87,47 @@ asr_service = ASRService(
     compute_type=config['compute_type']
 )
 
-# --- Audio Processing Configuration ---
-AUDIO_SAMPLE_RATE = 16000
-# Max duration to accumulate audio in seconds before forcing a transcription
-MAX_ACCUMULATE_DURATION = 10
-# Duration of silence in seconds to trigger transcription
-SILENCE_PAUSE_DURATION = 1.0
-# RMS threshold for silence detection. This may need tuning.
-SILENCE_THRESHOLD = 200
-# Number of chunks for the history buffer (~0.5 seconds)
-HISTORY_BUFFER_CHUNKS = 8
-
-class VadState(Enum):
-    IDLE = 1
-    SPEAKING = 2
-    COOLDOWN = 3
-
-def is_silent(audio_chunk: np.ndarray) -> bool:
-    """Check if an audio chunk is silent based on RMS energy."""
-    rms = np.sqrt(np.mean(audio_chunk.astype(np.float32)**2))
-    return rms < SILENCE_THRESHOLD
-
-async def process_and_transcribe(websocket: WebSocket, audio_data: list):
-    """Concatenate, convert, and transcribe a list of audio chunks."""
-    if not audio_data:
-        return
-
-    full_audio_segment_int16 = np.concatenate(audio_data)
-    full_audio_segment_float32 = full_audio_segment_int16.astype(np.float32) / 32768.0 
-    
-    # Transcribe using the configured language and VAD setting
-    transcription = asr_service.transcribe_audio(
-        full_audio_segment_float32, 
-        language=config['language'],
-        vad_filter=config['vad_filter']  # This should be false to rely on our VAD
-    )
-    
-    if transcription:
-        print(f"Transcription ({config['language']}): {transcription}")
-        await websocket.send_text(transcription)
-
 @app.websocket("/ws/asr")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket connected.")
 
-    main_buffer = []
-    # History buffer to keep some audio before speech starts (pre-roll)
-    history_buffer = collections.deque(maxlen=HISTORY_BUFFER_CHUNKS)
-    state = VadState.IDLE
-    silence_start_time = None
-    loop = asyncio.get_running_loop()
+    # Initialize the Audio Stream Processor
+    # This handles buffering, silence detection (VAD), and segmentation
+    processor = AudioProcessor(
+        sample_rate=16000,
+        silence_threshold=200,
+        silence_pause_duration=1.0,
+        max_accumulate_duration=10
+    )
 
     try:
         while True:
+            # 1. Receive raw audio bytes
             data = await websocket.receive_bytes()
-            audio_chunk = np.frombuffer(data, dtype=np.int16)
-            history_buffer.append(audio_chunk)
-
-            chunk_is_silent = is_silent(audio_chunk)
-
-            if state == VadState.IDLE:
-                if not chunk_is_silent:
-                    # Speech detected, dump history buffer into main buffer
-                    state = VadState.SPEAKING
-                    main_buffer.extend(list(history_buffer))
-                    history_buffer.clear()
             
-            elif state == VadState.SPEAKING:
-                main_buffer.append(audio_chunk)
-                if chunk_is_silent:
-                    # Speech has paused, enter cooldown
-                    state = VadState.COOLDOWN
-                    silence_start_time = loop.time()
-                elif len(main_buffer) * (audio_chunk.shape[0] if audio_chunk.ndim > 0 else 1) >= AUDIO_SAMPLE_RATE * MAX_ACCUMULATE_DURATION:
-                    # Force transcription if max duration is reached
-                    await process_and_transcribe(websocket, main_buffer)
-                    main_buffer = []
-                    state = VadState.IDLE
+            # 2. Process audio chunk (VAD logic)
+            # Returns a numpy float32 array if a segment is ready, else None
+            audio_segment = processor.process(data)
 
-            elif state == VadState.COOLDOWN:
-                main_buffer.append(audio_chunk)
-                if not chunk_is_silent:
-                    # Speech resumed
-                    state = VadState.SPEAKING
-                    silence_start_time = None
-                elif (loop.time() - silence_start_time) > SILENCE_PAUSE_DURATION:
-                    # Silence pause is long enough, transcribe
-                    await process_and_transcribe(websocket, main_buffer)
-                    main_buffer = []
-                    state = VadState.IDLE
+            # 3. If we have a complete segment, run the pipeline
+            if audio_segment is not None:
+                # --- Pipeline Step A: ASR ---
+                # Transcribe using the configured language
+                # We disable internal VAD of Whisper because we handled it upstream
+                transcription = asr_service.transcribe_audio(
+                    audio_segment, 
+                    language=config['language'],
+                    vad_filter=False 
+                )
+                
+                # --- Pipeline Step B: LLM / Post-processing (Future) ---
+                # if config.use_llm:
+                #     transcription = llm_service.process(transcription)
+
+                if transcription:
+                    print(f"Transcription ({config['language']}): {transcription}")
+                    await websocket.send_text(transcription)
             
     except WebSocketDisconnect:
         print("WebSocket disconnected.")
@@ -192,5 +135,3 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WebSocket error: {e}")
     finally:
         print("WebSocket connection closed.")
-
-
