@@ -91,9 +91,12 @@ You need to run the server first, and then run the client in a separate terminal
 
 ### 1. Running the Server
 
+use the startup script in a complete python env.
 The server can be configured via a `config.json` file and overridden by environment variables. It will auto-detect a CUDA-enabled GPU if `DEVICE` is set to `"auto"`.
 
-**Recommended: Use the startup script**
+or use the server in docker (see above).
+
+**Use the startup script**
 This script automatically sets up the environment variables (fixing common library path issues with CUDA) and runs the server.
 ```bash
 ./start_server.sh
