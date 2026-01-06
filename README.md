@@ -71,9 +71,9 @@ For detailed instructions on how to create and install plugins, see [doc/plugins
     ```
 
 2.  **Install System Dependencies:**
-    This project requires `portaudio` for microphone access. On Debian-based systems (like Ubuntu), you can install it with:
+    This project requires `portaudio` for microphone access, and `xclip`/`xdotool` for keyboard emulation on Linux. On Debian-based systems (like Ubuntu), you can install them with:
     ```bash
-    sudo apt-get update && sudo apt-get install -y portaudio19-dev
+    sudo apt-get update && sudo apt-get install -y portaudio19-dev xclip xdotool
     ```
 
 3.  **Create and Activate Virtual Environment:**
@@ -220,7 +220,9 @@ source venv/bin/activate
 python -m src.tray_client
 ```
 
-*Note for Linux Users (Gnome):* If you don't see the icon, ensure you have the "AppIndicator and KStatusNotifierItem Support" extension installed, as standard Gnome Shell has removed tray icon support.
+*Note for Linux Users (Gnome/Wayland):* 
+- If you don't see the icon, ensure you have the "AppIndicator and KStatusNotifierItem Support" extension installed.
+- For keyboard emulation to work in native Wayland applications (like GNOME Text Editor), ensure you have installed `xclip` and `xdotool` (`sudo apt install xclip xdotool`). The client uses a clipboard-injection technique to bypass Wayland security restrictions.
 
 ### 5. Browser Extensions (Firefox & Chrome)
 
