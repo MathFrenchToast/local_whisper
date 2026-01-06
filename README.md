@@ -145,7 +145,23 @@ venv/bin/python -m src.client
 
 The client will connect to the server. Start speaking, and you will see the transcribed text appear in your terminal. Press `Ctrl+C` to stop the client.
 
-### 3. Browser Extensions (Firefox & Chrome)
+### 3. Running the Keyboard Client (Simulated Typing)
+
+This client listens to your voice and directly types the transcription into whichever application is currently focused on your desktop (like a text editor, IDE, or chat window).
+
+**To start the keyboard client:**
+```bash
+# Make sure you are in the virtual environment
+source venv/bin/activate
+# Run the keyboard client
+python -m src.keyboard_client
+```
+
+**Usage Controls:**
+*   **F8**: Toggle typing ON/OFF. The client starts in **DISABLED** mode by default to prevent accidental typing. Press F8 once you have focused the desired text field.
+*   **Ctrl+C**: Stop the client (in the terminal).
+
+### 4. Browser Extensions (Firefox & Chrome)
 
 Browser extensions allow you to use the ASR server directly in any web form (Gmail, Google Docs, etc.).
 
