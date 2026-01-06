@@ -161,7 +161,27 @@ python -m src.keyboard_client
 *   **F8**: Toggle typing ON/OFF. The client starts in **DISABLED** mode by default to prevent accidental typing. Press F8 once you have focused the desired text field.
 *   **Ctrl+C**: Stop the client (in the terminal).
 
-### 4. Browser Extensions (Firefox & Chrome)
+### 4. Running the System Tray Client (Cross-Platform)
+
+This is the most advanced client, designed to look and feel like a native application on Windows, macOS, and Linux. It minimizes to the system tray (notification area).
+
+**Features:**
+*   **System Tray Icon:** Shows status via color (🔴 Paused, 🟢 Active, 🟡 Error).
+*   **Background Operation:** Runs silently in the background.
+*   **Global Hotkey:** Press **F8** anywhere to toggle transcription.
+*   **Menu:** Right-click the icon to Exit.
+
+**To start the tray client:**
+```bash
+# Make sure you are in the virtual environment
+source venv/bin/activate
+# Run the tray client
+python -m src.tray_client
+```
+
+*Note for Linux Users (Gnome):* If you don't see the icon, ensure you have the "AppIndicator and KStatusNotifierItem Support" extension installed, as standard Gnome Shell has removed tray icon support.
+
+### 5. Browser Extensions (Firefox & Chrome)
 
 Browser extensions allow you to use the ASR server directly in any web form (Gmail, Google Docs, etc.).
 
