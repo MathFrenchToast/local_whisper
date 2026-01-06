@@ -1,6 +1,8 @@
-import pyaudio
-import numpy as np
 import time
+
+import numpy as np
+import pyaudio
+
 
 class AudioRecorder:
     def __init__(self, rate=16000, chunk_size=1024, format=pyaudio.paInt16, channels=1):
@@ -20,7 +22,9 @@ class AudioRecorder:
         self.p = pyaudio.PyAudio()
         self.stream = None
         self._running = False
-        print(f"AudioRecorder initialized with rate={rate}, chunk_size={chunk_size}, channels={channels}")
+        print(
+            f"AudioRecorder initialized with rate={rate}, chunk_size={chunk_size}, channels={channels}"
+        )
 
     def start_recording(self):
         """
@@ -35,7 +39,7 @@ class AudioRecorder:
             channels=self.channels,
             rate=self.rate,
             input=True,
-            frames_per_buffer=self.chunk_size
+            frames_per_buffer=self.chunk_size,
         )
         self._running = True
         print("Recording started...")
@@ -59,7 +63,9 @@ class AudioRecorder:
         Generator that yields audio chunks as NumPy arrays.
         """
         if not self._running:
-            raise RuntimeError("Recording is not started. Call start_recording() first.")
+            raise RuntimeError(
+                "Recording is not started. Call start_recording() first."
+            )
 
         while self._running:
             try:
@@ -80,6 +86,7 @@ class AudioRecorder:
         """
         if self.p:
             self.p.terminate()
+
 
 if __name__ == "__main__":
     # Example usage:
@@ -104,13 +111,14 @@ if __name__ == "__main__":
         # Concatenate all chunks into a single array
         full_audio = np.concatenate(audio_chunks)
         print(f"Total audio captured: {full_audio.shape} samples.")
-        
+
         # Example: Save to a WAV file (requires soundfile)
         import soundfile as sf
+
         output_filename = "recorded_audio.wav"
         # Ensure it's float32 for soundfile if it was converted for ASR
         # For saving raw int16, specify dtype=np.int16 in sf.write
-        sf.write(output_filename, full_audio, recorder.rate, subtype='PCM_16')
+        sf.write(output_filename, full_audio, recorder.rate, subtype="PCM_16")
         print(f"Saved recorded audio to {output_filename}")
-    
+
     print("Example finished.")
