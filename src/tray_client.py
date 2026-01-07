@@ -136,23 +136,38 @@ class TrayClient:
                     self.update_icon_state("error")
                     self.on_exit_click()
                     return
-                print(f"Connection attempt {attempt}/10 failed ({e}). Retrying in 2s...")
-                await asyncio.sleep(2)
+                print(f"Connection attempt {attempt}/10 failed ({e}). Retrying in 3s...")
+                await asyncio.sleep(3)
 
         recorder = None
         try:
             async with websocket:
                 recorder = AudioRecorder(rate=16000, chunk_size=1024, channels=1)
-                recorder.start_recording()
 
                 async def send_audio():
-                    audio_iter = recorder.get_audio_chunk()
-                    for chunk in audio_iter:
-                        if self.stop_event.is_set():
-                            break
+                    """Starts/Stops the microphone hardware based on is_typing_enabled."""
+                    while not self.stop_event.is_set():
                         if self.is_typing_enabled:
-                            await websocket.send(chunk.tobytes())
-                        await asyncio.sleep(0.001)
+                            if not recorder._running:
+                                recorder.start_recording()
+
+                            try:
+                                # Consume the generator while typing is enabled
+                                audio_iter = recorder.get_audio_chunk()
+                                for chunk in audio_iter:
+                                    if self.stop_event.is_set() or not self.is_typing_enabled:
+                                        break
+                                    await websocket.send(chunk.tobytes())
+                                    await asyncio.sleep(0.001)
+                            except Exception as e:
+                                print(f"Recording Error: {e}")
+                                break
+                            finally:
+                                # Always stop hardware when leaving the inner loop
+                                if recorder._running:
+                                    recorder.stop_recording()
+
+                        await asyncio.sleep(0.1)
 
                 async def receive_text():
                     while not self.stop_event.is_set():
