@@ -16,3 +16,4 @@ recorded_audio.wav
 build/
 dist/
 *.spec
+*.exe
