@@ -6,7 +6,6 @@ import subprocess
 import threading
 import tkinter as tk
 
-import pyperclip
 import websockets
 from pynput import keyboard
 
@@ -62,7 +61,6 @@ class GraphicalUI(BaseUI):
         self.frame.pack(fill="both", expand=True)
 
         # Content: Icon, Text, Close button
-        # Icon / Logo area (using a nice Unicode symbol as placeholder for the SVG)
         self.lbl_icon = tk.Label(self.frame, text="🎙️", bg=self.col_disabled, font=("Arial", 12))
         self.lbl_icon.pack(side="left", padx=(8, 0))
 
@@ -77,7 +75,7 @@ class GraphicalUI(BaseUI):
         )
         self.lbl_text.pack(side="left", padx=5, fill="x", expand=True)
 
-        # Close Button (Small 'X' on right)
+        # Close Button
         self.btn_close = tk.Label(
             self.frame,
             text="×",
@@ -103,7 +101,6 @@ class GraphicalUI(BaseUI):
 
     def start_move(self, event):
         self.x = event.x
-        self.y = event.y
 
     def do_move(self, event):
         deltax = event.x - self.x
@@ -121,7 +118,6 @@ class GraphicalUI(BaseUI):
         self.lbl_text.config(bg=color)
         self.btn_close.config(bg=color)
 
-        # Only update text if it was the default "Paused" message
         current_text = self.lbl_text_var.get()
         if "Paused" in current_text or "[F8]" in current_text or "Listening" in current_text:
             self.lbl_text_var.set(status_text)
@@ -130,7 +126,6 @@ class GraphicalUI(BaseUI):
         self.queue.put(("status", is_enabled))
 
     def update_text(self, text: str):
-        # Truncate text if too long for the mini window
         display_text = (text[:25] + "..") if len(text) > 25 else text
         self.queue.put(("text", display_text))
 
@@ -156,7 +151,6 @@ class GraphicalUI(BaseUI):
 
 # --- Core Logic ---
 
-# Global state for the pynput listener
 is_typing_enabled = False
 
 
@@ -172,12 +166,7 @@ def on_press(key, ui_callback):
 
 async def async_main_loop(uri, ui: BaseUI, stop_event: threading.Event):
     global is_typing_enabled
-
-    # Initialize keyboard controller
     kb_controller = keyboard.Controller()
-
-    # Start keyboard listener with callback to UI
-    # We use a lambda to pass the specific UI instance
     listener = keyboard.Listener(on_press=lambda k: on_press(k, ui.update_status))
     listener.start()
 
@@ -187,88 +176,64 @@ async def async_main_loop(uri, ui: BaseUI, stop_event: threading.Event):
         try:
             async with websockets.connect(uri) as websocket:
                 ui.log("Connected! Press F8 to toggle typing.")
-
                 recorder = AudioRecorder(rate=16000, chunk_size=1024, channels=1)
-                recorder.start_recording()
 
-                try:
-                    # Task to send audio
-                    async def send_audio():
-                        # Get the generator once
-                        audio_iter = recorder.get_audio_chunk()
-
-                        # Iterate directly. This loop runs as long as the generator yields (i.e., while recording)
-                        for audio_chunk_int16 in audio_iter:
-                            if stop_event.is_set():
-                                break
-
-                            await websocket.send(audio_chunk_int16.tobytes())
-                            # Small yield to let other asyncio tasks (like receiving) run
-                            await asyncio.sleep(0.001)
-
-                    # Task to receive transcriptions
-                    async def receive_and_type():
-                        while not stop_event.is_set():
-                            try:
-                                transcription = await asyncio.wait_for(
-                                    websocket.recv(), timeout=0.1
-                                )
-                                text = transcription.strip()
-                                if text:
-                                    ui.update_text(text)
-                                    if is_typing_enabled:
-                                        ui.log(f"[Typing]: {text}...")
-
-                                        # --- Wayland & Terminal Bypass: Clipboard Injection ---
-                                        try:
-                                            pyperclip.copy(text + " ")
-                                            await asyncio.sleep(0.05)  # Wait for clipboard
-
-                                            if platform.system() == "Linux":
-                                                try:
-                                                    # Shift+Insert is universal on Linux (Terminal + GUI)
-                                                    subprocess.run(
-                                                        ["xdotool", "key", "shift+Insert"],
-                                                        check=False,
-                                                    )
-                                                except FileNotFoundError:
-                                                    # Fallback to pynput
-                                                    with kb_controller.pressed(keyboard.Key.shift):
-                                                        kb_controller.press(keyboard.Key.insert)
-                                                        kb_controller.release(keyboard.Key.insert)
-                                            else:
-                                                # Windows/Mac: Ctrl+V
-                                                with kb_controller.pressed(keyboard.Key.ctrl):
-                                                    kb_controller.press("v")
-                                                    kb_controller.release("v")
-
-                                            await asyncio.sleep(0.1)  # Debounce
-                                        except Exception as e:
-                                            ui.log(f"Clipboard Error: {e}")
-                                    else:
-                                        ui.log("[Skipped]: Typing disabled")
-                            except asyncio.TimeoutError:
-                                continue  # Just check stop_event again
-
-                    # Run tasks
-                    task1 = asyncio.create_task(send_audio())
-                    task2 = asyncio.create_task(receive_and_type())
-
-                    # Wait until one fails or stop_event is set
+                async def send_audio():
                     while not stop_event.is_set():
-                        if task1.done() or task2.done():
-                            break
+                        if is_typing_enabled:
+                            if not recorder._running:
+                                recorder.start_recording()
+                            try:
+                                audio_iter = recorder.get_audio_chunk()
+                                for chunk in audio_iter:
+                                    if stop_event.is_set() or not is_typing_enabled:
+                                        break
+                                    await websocket.send(chunk.tobytes())
+                                    await asyncio.sleep(0.001)
+                            except Exception:
+                                break
+                            finally:
+                                if recorder._running:
+                                    recorder.stop_recording()
                         await asyncio.sleep(0.1)
 
-                    task1.cancel()
-                    task2.cancel()
+                async def receive_and_type():
+                    while not stop_event.is_set():
+                        try:
+                            transcription = await asyncio.wait_for(websocket.recv(), timeout=0.1)
+                            text = transcription.strip()
+                            if text:
+                                ui.update_text(text)
+                                if is_typing_enabled:
+                                    full_text = text + " "
+                                    if platform.system() == "Linux":
+                                        try:
+                                            # Use xdotool type with higher delay (50ms) for Web & Accents
+                                            subprocess.run(
+                                                [
+                                                    "xdotool",
+                                                    "type",
+                                                    "--clearmodifiers",
+                                                    "--delay",
+                                                    "50",
+                                                    full_text,
+                                                ],
+                                                check=False,
+                                            )
+                                        except FileNotFoundError:
+                                            # Fallback to pynput with character delay
+                                            for char in full_text:
+                                                kb_controller.type(char)
+                                                await asyncio.sleep(0.02)
+                                    else:
+                                        # Windows/Mac: standard pynput with character delay
+                                        for char in full_text:
+                                            kb_controller.type(char)
+                                            await asyncio.sleep(0.02)
+                        except asyncio.TimeoutError:
+                            continue
 
-                except websockets.exceptions.ConnectionClosed:
-                    ui.log("Connection lost. Retrying in 2s...")
-                    recorder.stop_recording()
-                    await asyncio.sleep(2)
-                finally:
-                    recorder.stop_recording()
+                await asyncio.gather(send_audio(), receive_and_type())
 
         except Exception as e:
             if not stop_event.is_set():
@@ -276,7 +241,6 @@ async def async_main_loop(uri, ui: BaseUI, stop_event: threading.Event):
                 await asyncio.sleep(2)
 
     listener.stop()
-    ui.log("Async loop finished.")
 
 
 def run_async_in_thread(uri, ui, stop_event):
@@ -294,22 +258,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     websocket_uri = f"ws://{args.host}:{args.port}/ws/asr"
-
     stop_event = threading.Event()
 
     if args.gui:
-        # GUI Mode
         root = tk.Tk()
         ui = GraphicalUI(root, stop_event)
-
-        # Start async logic in a separate thread
         t = threading.Thread(
             target=run_async_in_thread,
             args=(websocket_uri, ui, stop_event),
             daemon=True,
         )
         t.start()
-
         try:
             root.mainloop()
         except KeyboardInterrupt:
@@ -317,16 +276,8 @@ if __name__ == "__main__":
         finally:
             stop_event.set()
     else:
-        # CLI Mode
         ui = TerminalUI()
-        print("---------------------------------------------------------")
-        print("Press F8 to TOGGLE typing (Default: DISABLED).")
-        print("Use --gui to see a status window.")
-        print("---------------------------------------------------------")
-
         try:
-            # Run async directly in main thread
             asyncio.run(async_main_loop(websocket_uri, ui, stop_event))
         except KeyboardInterrupt:
-            print("\nExiting...")
             stop_event.set()

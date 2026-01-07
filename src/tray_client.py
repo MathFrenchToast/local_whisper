@@ -164,7 +164,6 @@ class TrayClient:
                                 recorder.start_recording()
 
                             try:
-                                # Consume the generator while typing is enabled
                                 audio_iter = recorder.get_audio_chunk()
                                 for chunk in audio_iter:
                                     if self.stop_event.is_set() or not self.is_typing_enabled:
@@ -175,10 +174,8 @@ class TrayClient:
                                 print(f"Recording Error: {e}")
                                 break
                             finally:
-                                # Always stop hardware when leaving the inner loop
                                 if recorder._running:
                                     recorder.stop_recording()
-
                         await asyncio.sleep(0.1)
 
                 async def receive_text():
@@ -188,27 +185,57 @@ class TrayClient:
                             text = msg.strip()
                             if text and self.is_typing_enabled:
                                 print(f"Server: {text}")
-                                self.last_activity_time = time.time()  # Activity detected!
+                                self.last_activity_time = time.time()
                                 full_text = text + " "
+
                                 if self.paste_mode:
-                                    pyperclip.copy(full_text)
-                                    await asyncio.sleep(0.05)
-                                    if platform.system() == "Linux":
-                                        subprocess.run(
-                                            ["xdotool", "key", "shift+Insert"], check=False
-                                        )
-                                    else:
-                                        with self.kb_controller.pressed(keyboard.Key.ctrl):
-                                            self.kb_controller.press("v")
-                                            self.kb_controller.release("v")
+                                    # --- Paste Mode (Clipboard Injection) ---
+                                    try:
+                                        pyperclip.copy(full_text)
+                                        # Critical: Wait for clipboard to sync (required for Terminals)
+                                        await asyncio.sleep(0.2)
+
+                                        if platform.system() == "Linux":
+                                            # Shift+Insert is more universal than Ctrl+V on Linux
+                                            subprocess.run(
+                                                [
+                                                    "xdotool",
+                                                    "key",
+                                                    "--clearmodifiers",
+                                                    "shift+Insert",
+                                                ],
+                                                check=False,
+                                            )
+                                        else:
+                                            with self.kb_controller.pressed(keyboard.Key.ctrl):
+                                                self.kb_controller.press("v")
+                                                self.kb_controller.release("v")
+                                    except Exception as e:
+                                        print(f"Paste Error: {e}")
                                 else:
+                                    # --- Type Mode (Simulated Typing) ---
                                     if platform.system() == "Linux":
-                                        subprocess.run(
-                                            ["xdotool", "type", "--delay", "2", full_text],
-                                            check=False,
-                                        )
+                                        try:
+                                            # Delay 50ms is required for accents (dead keys) and Web Browsers
+                                            subprocess.run(
+                                                [
+                                                    "xdotool",
+                                                    "type",
+                                                    "--clearmodifiers",
+                                                    "--delay",
+                                                    "50",
+                                                    full_text,
+                                                ],
+                                                check=False,
+                                            )
+                                        except FileNotFoundError:
+                                            for char in full_text:
+                                                self.kb_controller.type(char)
+                                                await asyncio.sleep(0.02)
                                     else:
-                                        self.kb_controller.type(full_text)
+                                        for char in full_text:
+                                            self.kb_controller.type(char)
+                                            await asyncio.sleep(0.02)
                         except asyncio.TimeoutError:
                             continue
 
@@ -226,19 +253,13 @@ class TrayClient:
                     pass
 
     def run(self):
-        # 1. Keyboard
         kb_listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         kb_listener.start()
-
-        # 2. Watchdog (Sleep detection)
         t_watchdog = threading.Thread(target=self.sleep_watchdog, daemon=True)
         t_watchdog.start()
-
-        # 3. Logic thread
         t_logic = threading.Thread(target=lambda: asyncio.run(self.async_audio_loop()), daemon=True)
         t_logic.start()
 
-        # 4. Tray Icon (Main thread)
         def get_mode_text(item):
             return "Switch to Type Mode" if self.paste_mode else "Switch to Paste Mode"
 
